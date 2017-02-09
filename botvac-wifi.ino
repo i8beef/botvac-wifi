@@ -13,7 +13,6 @@
 
 #define SSID_FILE "etc/ssid"
 #define PASSWORD_FILE "etc/pass"
-#define HOST_FILE "etc/hostname"
 
 #define AP_SSID "neato"
 
@@ -77,15 +76,14 @@ void setupEvent() {
 void saveEvent() {
   String user_ssid = server.arg("ssid");
   String user_password = server.arg("password");
-
+  
   if(user_ssid != "" && user_password != "") {
     File ssid_file = SPIFFS.open(SSID_FILE, "w");
     ssid_file.print(user_ssid);
     ssid_file.close();
     File passwd_file = SPIFFS.open(PASSWORD_FILE, "w");
-    asswd_file.print(user_password);
+    passwd_file.print(user_password);
     passwd_file.close();
-
     ESP.reset();
   }
   //save these to the filesystem
@@ -144,16 +142,18 @@ void setup() {
 
   if(SPIFFS.exists(SSID_FILE) && SPIFFS.exists(PASSWORD_FILE)) {
     File ssid_file = SPIFFS.open(SSID_FILE, "r");
-    String ssid = ssid_file.readString();
+    char ssid[256];
+    ssid_file.readString().toCharArray(ssid, 256);
     ssid_file.close();
     File passwd_file = SPIFFS.open(PASSWORD_FILE, "r");
-    String passwd = passwd_file.readString();
+    char passwd[256];
+    passwd_file.readString().toCharArray(passwd, 256);
     passwd_file.close();
 
   // start wifi
     WiFi.disconnect();
     WiFi.mode(WIFI_STA);
-    WiFi.begin(SSID, PASSWORD);
+    WiFi.begin(ssid, passwd);
     while (WiFi.status() != WL_CONNECTED) {
       delay(500);
     }
@@ -197,14 +197,14 @@ void setup() {
   updateServer.begin();
   // start webserver
   server.on("/", serverEvent);
-  server.on("/setup", POST, saveEvent);
-  server.on("/setup", GET, setupEvent);
+  server.on("/setup", HTTP_POST, saveEvent);
+  server.on("/setup", HTTP_GET, setupEvent);
   server.onNotFound(serverEvent);
   server.begin();
 
   // start MDNS
   // this means that the botvac can be reached at http://neato.local or ws://neato.local:81
-  if (!MDNS.begin(HOST)) {
+  if (!MDNS.begin("neato")) {
     while (1) {
       // wait for watchdog timer
       delay(500);
