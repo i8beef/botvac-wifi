@@ -15,9 +15,7 @@
 #define PASSWORD_FILE "etc/pass"
 #define HOST_FILE "etc/hostname"
 
-#define AP_IP "192.168.0.1"
 #define AP_SSID "neato"
-#define AP_PASSWORD "neato"
 
 WiFiClient client;
 int maxBuffer = 8192;
@@ -77,7 +75,20 @@ void setupEvent() {
 }
 
 void saveEvent() {
+  String user_ssid = server.arg("ssid");
+  String user_password = server.arg("password");
 
+  if(user_ssid != "" && user_password != "") {
+    File ssid_file = SPIFFS.open(SSID_FILE, "w");
+    ssid_file.print(user_ssid);
+    ssid_file.close();
+    File passwd_file = SPIFFS.open(PASSWORD_FILE, "w");
+    asswd_file.print(user_password);
+    passwd_file.close();
+
+    ESP.reset();
+  }
+  //save these to the filesystem
 }
 
 void serialEvent() {
@@ -132,8 +143,12 @@ void setup() {
   SPIFFS.begin();
 
   if(SPIFFS.exists(SSID_FILE) && SPIFFS.exists(PASSWORD_FILE)) {
-    String ssid = SPIFFS.open(SSID_FILE, "r").readString();
-    String passwd = SPIFFS.open(PASSWORD_FILE, "r").readString();
+    File ssid_file = SPIFFS.open(SSID_FILE, "r");
+    String ssid = ssid_file.readString();
+    ssid_file.close();
+    File passwd_file = SPIFFS.open(PASSWORD_FILE, "r");
+    String passwd = passwd_file.readString();
+    passwd_file.close();
 
   // start wifi
     WiFi.disconnect();
@@ -145,9 +160,9 @@ void setup() {
   }
   else {
     WiFi.disconnect();
-    IPAddress AP_IP = WiFi.softAP(AP_SSID, AP_PASSWORD);
+    if(! WiFi.softAP(AP_SSID))
+      ESP.reset();
   }
-
 
   // start websocket
   webSocket.begin();
@@ -182,8 +197,8 @@ void setup() {
   updateServer.begin();
   // start webserver
   server.on("/", serverEvent);
-  server.on("/save_settings", saveEvent);
-  server.on("/setup", setupEvent);
+  server.on("/setup", POST, saveEvent);
+  server.on("/setup", GET, setupEvent);
   server.onNotFound(serverEvent);
   server.begin();
 
