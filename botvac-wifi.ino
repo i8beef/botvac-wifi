@@ -14,7 +14,10 @@
 #define SSID_FILE "etc/ssid"
 #define PASSWORD_FILE "etc/pass"
 #define HOST_FILE "etc/hostname"
-#define HTML_FILE "web/index.html"
+
+#define AP_IP "192.168.0.1"
+#define AP_SSID "neato"
+#define AP_PASSWORD "neato"
 
 WiFiClient client;
 int maxBuffer = 8192;
@@ -64,25 +67,34 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t lenght
 
 void serverEvent() {
   // just a very simple websocket terminal, feel free to use a custom one
-  String page = SPIFFS.open(HTML_FILE, "r").readString();
+  String page = SPIFFS.open("web/index.html", "r").readString();
   server.send(200, "text/html", page);
+}
+
+void setupEvent() {
+  String page = SPIFFS.open("web/setup.html", "r").readString();
+  server.send(200, "text/html", page);
+}
+
+void saveEvent() {
+
 }
 
 void serialEvent() {
   while (Serial.available() > 0) {
     char in = Serial.read();
-    // there is no proper utf-8 support so replace all non-ascii 
-    // characters (<127) with underscores; this should have no 
-    // impact on normal operations and is only relevant for non-english 
+    // there is no proper utf-8 support so replace all non-ascii
+    // characters (<127) with underscores; this should have no
+    // impact on normal operations and is only relevant for non-english
     // plain-text error messages
     if (in > 127) {
       in = '_';
     }
     serialBuffer[bufferSize] = in;
     bufferSize++;
-    // fill up the serial buffer until its max size (8192 bytes, see maxBuffer) 
+    // fill up the serial buffer until its max size (8192 bytes, see maxBuffer)
     // or unitl the end of file marker (ctrl-z; \x1A) is reached
-    // a worst caste lidar result should be just under 8k, so that maxBuffer 
+    // a worst caste lidar result should be just under 8k, so that maxBuffer
     // limit should not be reached under normal conditions
     if (bufferSize > maxBuffer - 1 || in == '\x1A') {
       serialBuffer[bufferSize] = '\0';
@@ -94,7 +106,7 @@ void serialEvent() {
         localBuffer[localNum] = serialBuffer[bufferNum];
         localNum++;
         // split the websocket packet in smaller (1300 + x) byte packets
-        // this is a workaround for some issue that causes data corruption 
+        // this is a workaround for some issue that causes data corruption
         // if the payload is split by the wifi library into more than 2 tcp packets
         if (serialBuffer[bufferNum] == '\x1A' || (serialBuffer[bufferNum] == '\n' && localNum > 1300)) {
           localBuffer[localNum] = '\0';
@@ -120,8 +132,8 @@ void setup() {
   SPIFFS.begin();
 
   if(SPIFFS.exists(SSID_FILE) && SPIFFS.exists(PASSWORD_FILE)) {
-    String ssid  = SPIFFS.open(SSID_FILE, "r").readString();
-    String passwd  = SPIFFS.open(PASSWORD_FILE, "r").readString();
+    String ssid = SPIFFS.open(SSID_FILE, "r").readString();
+    String passwd = SPIFFS.open(PASSWORD_FILE, "r").readString();
 
   // start wifi
     WiFi.disconnect();
@@ -129,13 +141,14 @@ void setup() {
     WiFi.begin(SSID, PASSWORD);
     while (WiFi.status() != WL_CONNECTED) {
       delay(500);
-    }  
-  } 
-  else {
-    
+    }
   }
-  
-  
+  else {
+    WiFi.disconnect();
+    IPAddress AP_IP = WiFi.softAP(AP_SSID, AP_PASSWORD);
+  }
+
+
   // start websocket
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
@@ -145,16 +158,16 @@ void setup() {
     SPIFFS.end();
     webSocket.sendTXT(currentClient, "ESP-12F: OTA Update Starting\n");
   });
-  
+
   ArduinoOTA.onEnd([]() {
     SPIFFS.begin();
     webSocket.sendTXT(currentClient, "ESP-12F: OTA Update Complete\n");
   });
-  
+
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     webSocket.sendTXT(currentClient, "ESP-12F: OTA Progress: %u%%\r", (progress / (total / 100)));
   });
-  
+
   ArduinoOTA.onError([](ota_error_t error) {
     Serial.printf("Error[%u]: ", error);
     if (error == OTA_AUTH_ERROR) Serial.println("ESP-12F: OTA Auth Failed");
@@ -169,6 +182,8 @@ void setup() {
   updateServer.begin();
   // start webserver
   server.on("/", serverEvent);
+  server.on("/save_settings", saveEvent);
+  server.on("/setup", setupEvent);
   server.onNotFound(serverEvent);
   server.begin();
 
