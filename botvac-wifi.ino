@@ -64,13 +64,13 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t lenght
 
 void serverEvent() {
   // just a very simple websocket terminal, feel free to use a custom one
-  String page = SPIFFS.open("web/index.html", "r").readString();
-  server.send(200, "text/html", page);
+  //String page = SPIFFS.open("web/index.html", "r").readString();
+  server.send(200, "text/html", "<!DOCTYPE html><meta charset='utf-8' /><style>p{white-space:pre;word-wrap:break-word;font-family:monospace;}</style><title>Neato Console</title><script language='javascript' type='text/javascript'>var b='ws://'+location.hostname+':81/',c,d,e;function g(){d=new WebSocket(b);d.onopen=function(){h('[connected]')};d.onclose=function(){h('[disconnected]')};d.onmessage=function(a){h('<span style=\"color: blue;\">[response] '+a.data+'</span>')};d.onerror=function(a){h('<span style=\"color: red;\">[error] </span> '+a.data)}}\nfunction k(a){if(13==a.keyCode){a=e.value;if('/disconnect'==a)d.close();else if('/clear'==a)for(;c.firstChild;)c.removeChild(c.firstChild);else''!=a&&(h('[sent] '+a),d.send(a));e.value='';e.focus()}}function h(a){var f=document.createElement('p');f.innerHTML=a;c.appendChild(f);window.scrollTo(0,document.body.scrollHeight)}\nwindow.addEventListener('load',function(){c=document.getElementById('c');e=document.getElementById('i');g();document.getElementById('i').addEventListener('keyup',k,!1);e.focus()},!1);</script><h2>Neato Console</h2><div id='c'></div><input type='text' id='i' style=\"width:100%;font-family:monospace;\">\n");
 }
 
 void setupEvent() {
-  String page = SPIFFS.open("web/setup.html", "r").readString();
-  server.send(200, "text/html", page);
+  //String page = SPIFFS.open("web/setup.html", "r").readString();
+  server.send(200, "text/html", "<!DOCTYPE html><html> <body> <form action=\"setup\" method=\"post\"> Access Point SSID:<br><input type=\"text\" name=\"ssid\" value=\"XXX\"> <br>WPA2 Password:<br><input type=\"text\" name=\"password\" value=\"XXX\"> <br><br><input type=\"submit\" value=\"Submit\"> </form> <p>Enter the details for your access point. After you submit, the controller will reboot to apply the settings.</p></body></html>\n");
 }
 
 void saveEvent() {
