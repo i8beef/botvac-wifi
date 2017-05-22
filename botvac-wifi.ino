@@ -9,12 +9,18 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <ESP8266HTTPUpdateServer.h>
+#include <ESP8266HTTPClient.h>
+#include <TimedAction.h>
 
 
 #define SSID_FILE "etc/ssid"
 #define PASSWORD_FILE "etc/pass"
 
 #define AP_SSID "neato"
+String readString;
+const char http_site[] = "www.auto-mated.com";
+const int http_port = 80;
+
 
 WiFiClient client;
 int maxBuffer = 8192;
@@ -25,6 +31,39 @@ ESP8266WebServer server = ESP8266WebServer(80);
 WebSocketsServer webSocket = WebSocketsServer(81);
 ESP8266WebServer updateServer(82);
 ESP8266HTTPUpdateServer httpUpdater;
+
+bool ping() {
+  // CALLBACK TO KNOW WE'RE ONLINE!
+  HTTPClient http;  //Declare an object of class HTTPClient
+  http.begin("http://www.auto-mated.com/neato/api/callback.php?serial=c8a030bf55ca&ping=true");  //Specify request destination
+  int httpCode = http.GET();
+}
+
+void getPage() {
+  if (WiFi.status() == WL_CONNECTED) { //Check WiFi connection status
+   
+      HTTPClient http;  //Declare an object of class HTTPClient
+   
+      http.begin("http://www.auto-mated.com/neato/api/actionPull.php?serial=c8a030bf55ca");  //Specify request destination
+      int httpCode = http.GET();                                                                  //Send the request
+   
+      if (httpCode > 0) { //Check the returning code
+   
+        String payload = http.getString();   //Get the request response payload
+        if (payload != "None") {
+          // If it's something other than none, shoot it to the vac.
+          Serial.println(payload);
+        }
+      }
+   
+      http.end();   //Close connection
+      ping();
+    }
+}
+
+//create a couple timers that will fire repeatedly every x ms
+TimedAction checkServer = TimedAction(5000,getPage);
+
 
 
 void botDissconect() {
@@ -64,12 +103,10 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t lenght
 
 void serverEvent() {
   // just a very simple websocket terminal, feel free to use a custom one
-  //String page = SPIFFS.open("web/index.html", "r").readString();
   server.send(200, "text/html", "<!DOCTYPE html><meta charset='utf-8' /><style>p{white-space:pre;word-wrap:break-word;font-family:monospace;}</style><title>Neato Console</title><script language='javascript' type='text/javascript'>var b='ws://'+location.hostname+':81/',c,d,e;function g(){d=new WebSocket(b);d.onopen=function(){h('[connected]')};d.onclose=function(){h('[disconnected]')};d.onmessage=function(a){h('<span style=\"color: blue;\">[response] '+a.data+'</span>')};d.onerror=function(a){h('<span style=\"color: red;\">[error] </span> '+a.data)}}\nfunction k(a){if(13==a.keyCode){a=e.value;if('/disconnect'==a)d.close();else if('/clear'==a)for(;c.firstChild;)c.removeChild(c.firstChild);else''!=a&&(h('[sent] '+a),d.send(a));e.value='';e.focus()}}function h(a){var f=document.createElement('p');f.innerHTML=a;c.appendChild(f);window.scrollTo(0,document.body.scrollHeight)}\nwindow.addEventListener('load',function(){c=document.getElementById('c');e=document.getElementById('i');g();document.getElementById('i').addEventListener('keyup',k,!1);e.focus()},!1);</script><h2>Neato Console</h2><div id='c'></div><input type='text' id='i' style=\"width:100%;font-family:monospace;\">\n");
 }
 
 void setupEvent() {
-  //String page = SPIFFS.open("web/setup.html", "r").readString();
   server.send(200, "text/html", "<!DOCTYPE html><html> <body> <form action=\"setup\" method=\"post\"> Access Point SSID:<br><input type=\"text\" name=\"ssid\" value=\"XXX\"> <br>WPA2 Password:<br><input type=\"text\" name=\"password\" value=\"XXX\"> <br><br><input type=\"submit\" value=\"Submit\"> </form> <p>Enter the details for your access point. After you submit, the controller will reboot to apply the settings.</p></body></html>\n");
 }
 
@@ -171,25 +208,25 @@ void setup() {
   //OTA update hooks
   ArduinoOTA.onStart([]() {
     SPIFFS.end();
-    webSocket.sendTXT(currentClient, "ESP-12F: OTA Update Starting\n");
+    webSocket.sendTXT(currentClient, "ESP-12x: OTA Update Starting\n");
   });
 
   ArduinoOTA.onEnd([]() {
     SPIFFS.begin();
-    webSocket.sendTXT(currentClient, "ESP-12F: OTA Update Complete\n");
+    webSocket.sendTXT(currentClient, "ESP-12x: OTA Update Complete\n");
   });
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    webSocket.sendTXT(currentClient, "ESP-12F: OTA Progress: %u%%\r", (progress / (total / 100)));
+    webSocket.sendTXT(currentClient, "ESP-12x: OTA Progress: %u%%\r", (progress / (total / 100)));
   });
 
   ArduinoOTA.onError([](ota_error_t error) {
     Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) Serial.println("ESP-12F: OTA Auth Failed");
-    else if (error == OTA_BEGIN_ERROR) Serial.println("ESP-12F: OTA Begin Failed");
-    else if (error == OTA_CONNECT_ERROR) Serial.println("ESP-12F: OTA Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR) Serial.println("ESP-12F: OTA Receive Failed");
-    else if (error == OTA_END_ERROR) Serial.println("ESP-12F: OTA End Failed");
+    if (error == OTA_AUTH_ERROR) Serial.println("ESP-12x: OTA Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("ESP-12x: OTA Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("ESP-12x: OTA Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("ESP-12x: OTA Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("ESP-12x: OTA End Failed");
   });
 
   ArduinoOTA.begin();
@@ -214,13 +251,22 @@ void setup() {
   MDNS.addService("ws", "tcp", 81);
   MDNS.addService("http", "tcp", 82);
 
-  webSocket.sendTXT(currentClient, "ESP-12F: Ready\n");
+  webSocket.sendTXT(currentClient, "ESP-12x: Ready\n");
 }
 
 void loop() {
+  checkServer.check();
   webSocket.loop();
+  
+  checkServer.check();
   server.handleClient();
+  
+  checkServer.check();
   ArduinoOTA.handle();
+  
+  checkServer.check();
   updateServer.handleClient();
+  
+  checkServer.check();
   serialEvent();
 }
