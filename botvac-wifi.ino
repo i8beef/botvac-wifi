@@ -11,13 +11,19 @@
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266HTTPClient.h>
 #include <TimedAction.h>
+#include <rBase64.h>
 
 
 #define SSID_FILE "etc/ssid"
 #define PASSWORD_FILE "etc/pass"
+#define SERIAL_NUMBER "etc/serial"
 
 #define AP_SSID "neato"
 String readString;
+String incomingSerial = "Empty";
+String batteryInfo;
+int lastBattRun = 0;
+char serialnum[256];
 const char http_site[] = "www.auto-mated.com";
 const int http_port = 80;
 
@@ -32,20 +38,19 @@ WebSocketsServer webSocket = WebSocketsServer(81);
 ESP8266WebServer updateServer(82);
 ESP8266HTTPUpdateServer httpUpdater;
 
-bool ping() {
-  // CALLBACK TO KNOW WE'RE ONLINE!
-  HTTPClient http;  //Declare an object of class HTTPClient
-  http.begin("http://www.auto-mated.com/neato/api/callback.php?serial=c8a030bf55ca&ping=true");  //Specify request destination
-  int httpCode = http.GET();
-}
-
 void getPage() {
   if (WiFi.status() == WL_CONNECTED) { //Check WiFi connection status
    
+      // Only check battery once at the beginning, once every 60 seconds, or once when it got an empty response.
+      if (batteryInfo == "" || batteryInfo == "-FAIL-" || lastBattRun > 11) {
+        getBattery();
+        lastBattRun = 0;
+      } else {
+        lastBattRun++;
+      }
       HTTPClient http;  //Declare an object of class HTTPClient
-   
-      http.begin("http://www.auto-mated.com/neato/api/actionPull.php?serial=c8a030bf55ca");  //Specify request destination
-      int httpCode = http.GET();                                                                  //Send the request
+      http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+incomingSerial+"&battery="+batteryInfo);  //Specify request destination
+      int httpCode = http.GET(); //Send the request
    
       if (httpCode > 0) { //Check the returning code
    
@@ -53,25 +58,61 @@ void getPage() {
         if (payload != "None") {
           // If it's something other than none, shoot it to the vac.
           Serial.println(payload);
+          delay(2000);
+          // Do it twice because we might be asleep
+          Serial.println(payload);
         }
       }
    
       http.end();   //Close connection
-      ping();
     }
 }
 
+void getSerial() {
+    Serial.setTimeout(250);
+    Serial.println("GetVersion");
+    incomingSerial = Serial.readString();
+    int serialString = incomingSerial.indexOf("Serial Number");
+    if (serialString > -1){
+      int capUntil = serialString+50;
+      incomingSerial = rbase64.encode(incomingSerial.substring(serialString,capUntil));
+      incomingSerial.replace('+', '-');
+      incomingSerial.replace('/', '_');
+      incomingSerial.replace('=', ',');
+    }
+}
+
+void getBattery() {
+    Serial.setTimeout(500);
+    Serial.println("GetCharger");
+    String batteryInfoTemp = Serial.readString();
+    String checkArray[3] = {"FuelPercent", "ChargingActive", "ChargingEnabled"};
+    for (int i = 0; i < 3; i++){
+      int serialString = batteryInfoTemp.indexOf(checkArray[i]);
+      if (serialString > -1){
+        int checkLength = checkArray[i].length()+4;
+        int capUntil = serialString+checkLength;
+        if (i == 0) {
+          batteryInfo = batteryInfoTemp.substring(serialString,capUntil);
+        } else {
+          batteryInfo = batteryInfo + "," + batteryInfoTemp.substring(serialString,capUntil);
+        }
+      }
+    }
+    batteryInfo = rbase64.encode(batteryInfo);
+    batteryInfo.replace('+', '-');
+    batteryInfo.replace('/', '_');
+    batteryInfo.replace('=', ',');
+}
 //create a couple timers that will fire repeatedly every x ms
 TimedAction checkServer = TimedAction(5000,getPage);
-
-
 
 void botDissconect() {
   // always disable testmode on disconnect
   Serial.println("TestMode off");
 }
 
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t lenght) {
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
       // always disable testmode on disconnect
@@ -176,7 +217,7 @@ void setup() {
   Serial.begin(115200);
 
   SPIFFS.begin();
-
+  
   if(SPIFFS.exists(SSID_FILE) && SPIFFS.exists(PASSWORD_FILE)) {
     File ssid_file = SPIFFS.open(SSID_FILE, "r");
     char ssid[256];
@@ -233,9 +274,9 @@ void setup() {
   httpUpdater.setup(&updateServer);
   updateServer.begin();
   // start webserver
-  server.on("/", serverEvent);
-  server.on("/setup", HTTP_POST, saveEvent);
-  server.on("/setup", HTTP_GET, setupEvent);
+  //server.on("/", serverEvent);
+  server.on("/", HTTP_POST, saveEvent);
+  server.on("/", HTTP_GET, setupEvent);
   server.onNotFound(serverEvent);
   server.begin();
 
@@ -268,5 +309,10 @@ void loop() {
   updateServer.handleClient();
   
   checkServer.check();
+  // Get our serial if we can
+  if (incomingSerial.indexOf("Empty") != -1){
+    getSerial();
+  }
+  checkServer.check();
   serialEvent();
-}
+  }
