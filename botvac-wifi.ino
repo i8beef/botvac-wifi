@@ -24,8 +24,6 @@ String incomingSerial = "Empty";
 String batteryInfo;
 int lastBattRun = 0;
 char serialnum[256];
-const char http_site[] = "www.auto-mated.com";
-const int http_port = 80;
 
 
 WiFiClient client;
@@ -48,23 +46,24 @@ void getPage() {
       } else {
         lastBattRun++;
       }
-      HTTPClient http;  //Declare an object of class HTTPClient
-      http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+incomingSerial+"&battery="+batteryInfo);  //Specify request destination
-      int httpCode = http.GET(); //Send the request
-   
-      if (httpCode > 0) { //Check the returning code
-   
-        String payload = http.getString();   //Get the request response payload
-        if (payload != "None") {
-          // If it's something other than none, shoot it to the vac.
-          Serial.println(payload);
-          delay(2000);
-          // Do it twice because we might be asleep
-          Serial.println(payload);
+      if (batteryInfo != "" && batteryInfo != "-FAIL-" && incomingSerial.indexOf("Empty") == -1 && incomingSerial != "") {
+        HTTPClient http;  //Declare an object of class HTTPClient
+        http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+incomingSerial+"&battery="+batteryInfo);  //Specify request destination
+        int httpCode = http.GET(); //Send the request
+     
+        if (httpCode > 0) { //Check the returning code
+     
+          String payload = http.getString();   //Get the request response payload
+          if (payload != "None") {
+            // If it's something other than none, shoot it to the vac.
+            Serial.println(payload);
+            //delay(2000);
+            // Do it twice because we might be asleep
+            //Serial.println(payload);
+          }
         }
+        http.end();   //Close connection
       }
-   
-      http.end();   //Close connection
     }
 }
 
@@ -148,7 +147,7 @@ void serverEvent() {
 }
 
 void setupEvent() {
-  server.send(200, "text/html", "<!DOCTYPE html><html> <body> <form action=\"setup\" method=\"post\"> Access Point SSID:<br><input type=\"text\" name=\"ssid\" value=\"XXX\"> <br>WPA2 Password:<br><input type=\"text\" name=\"password\" value=\"XXX\"> <br><br><input type=\"submit\" value=\"Submit\"> </form> <p>Enter the details for your access point. After you submit, the controller will reboot to apply the settings.</p></body></html>\n");
+  server.send(200, "text/html", "<!DOCTYPE html><html> <body> <form action=\"\" method=\"post\"> Access Point SSID:<br><input type=\"text\" name=\"ssid\" value=\"XXX\"> <br>WPA2 Password:<br><input type=\"text\" name=\"password\" value=\"XXX\"> <br><br><input type=\"submit\" value=\"Submit\"> </form> <p>Enter the details for your access point. After you submit, the controller will reboot to apply the settings.</p></body></html>\n");
 }
 
 void saveEvent() {
@@ -274,7 +273,7 @@ void setup() {
   httpUpdater.setup(&updateServer);
   updateServer.begin();
   // start webserver
-  //server.on("/", serverEvent);
+  server.on("/console", serverEvent);
   server.on("/", HTTP_POST, saveEvent);
   server.on("/", HTTP_GET, setupEvent);
   server.onNotFound(serverEvent);
@@ -310,7 +309,7 @@ void loop() {
   
   checkServer.check();
   // Get our serial if we can
-  if (incomingSerial.indexOf("Empty") != -1){
+  if (incomingSerial.indexOf("Empty") != -1 || incomingSerial == ""){
     getSerial();
   }
   checkServer.check();
