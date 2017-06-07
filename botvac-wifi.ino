@@ -21,6 +21,7 @@
 #define AP_SSID "neato"
 String readString;
 String incomingSerial = "Empty";
+String firmware = "1.0";
 String batteryInfo;
 int lastBattRun = 0;
 char serialnum[256];
@@ -48,7 +49,7 @@ void getPage() {
       }
       if (batteryInfo != "" && batteryInfo != "-FAIL-" && incomingSerial.indexOf("Empty") == -1 && incomingSerial != "") {
         HTTPClient http;  //Declare an object of class HTTPClient
-        http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+incomingSerial+"&battery="+batteryInfo);  //Specify request destination
+        http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+incomingSerial+"&battery="+batteryInfo+"&firmware="+firmware); //Specify request destination
         int httpCode = http.GET(); //Send the request
      
         if (httpCode > 0) { //Check the returning code
