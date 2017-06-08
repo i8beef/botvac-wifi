@@ -21,9 +21,11 @@
 #define AP_SSID "neato"
 String readString;
 String incomingSerial = "Empty";
-String firmware = "1.0";
+String incomingErr;
+String firmware = "1.3";
 String batteryInfo;
 int lastBattRun = 0;
+int lastErrRun = 0;
 char serialnum[256];
 
 
@@ -47,20 +49,23 @@ void getPage() {
       } else {
         lastBattRun++;
       }
+      if (incomingErr == "" || incomingErr == "-FAIL-" || lastErrRun > 11) {
+        getError();
+        lastErrRun = 0;
+      } else {
+        lastErrRun++;
+      }
       if (batteryInfo != "" && batteryInfo != "-FAIL-" && incomingSerial.indexOf("Empty") == -1 && incomingSerial != "") {
         HTTPClient http;  //Declare an object of class HTTPClient
-        http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+incomingSerial+"&battery="+batteryInfo+"&firmware="+firmware); //Specify request destination
+        http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+incomingSerial+"&battery="+batteryInfo+"&firmware="+firmware+"&errorMsg="+incomingErr);  //Specify request destination
         int httpCode = http.GET(); //Send the request
      
         if (httpCode > 0) { //Check the returning code
      
           String payload = http.getString();   //Get the request response payload
-          if (payload != "None") {
+          if (payload.indexOf("None") == -1) {
             // If it's something other than none, shoot it to the vac.
             Serial.println(payload);
-            //delay(2000);
-            // Do it twice because we might be asleep
-            //Serial.println(payload);
           }
         }
         http.end();   //Close connection
@@ -75,10 +80,28 @@ void getSerial() {
     int serialString = incomingSerial.indexOf("Serial Number");
     if (serialString > -1){
       int capUntil = serialString+50;
-      incomingSerial = rbase64.encode(incomingSerial.substring(serialString,capUntil));
-      incomingSerial.replace('+', '-');
-      incomingSerial.replace('/', '_');
-      incomingSerial.replace('=', ',');
+      String serialCap = incomingSerial.substring(serialString, capUntil);
+      int commaIndex = serialCap.indexOf(',');
+      int secondCommaIndex = serialCap.indexOf(',', commaIndex + 1);
+      int thirdCommaIndex = serialCap.indexOf(',', secondCommaIndex + 1);
+      incomingSerial = serialCap.substring(secondCommaIndex + 1, thirdCommaIndex); // To the end of the string
+    }
+}
+
+void getError() {
+    Serial.setTimeout(100);
+    Serial.println("GetErr");
+    String incomingErrTemp = Serial.readString();
+    // Check for dash in error
+    int serialString = incomingErrTemp.indexOf(" - ");
+    int capUntil = serialString-4;
+    if (serialString > -1){
+      incomingErr = rbase64.encode(incomingErrTemp.substring(capUntil,serialString));
+      incomingErr.replace('+', '-');
+      incomingErr.replace('/', '_');
+      incomingErr.replace('=', ',');
+    } else {
+      incomingErr = "None";
     }
 }
 
@@ -86,16 +109,19 @@ void getBattery() {
     Serial.setTimeout(500);
     Serial.println("GetCharger");
     String batteryInfoTemp = Serial.readString();
-    String checkArray[3] = {"FuelPercent", "ChargingActive", "ChargingEnabled"};
-    for (int i = 0; i < 3; i++){
+    String checkArray[5] = {"FuelPercent", "ChargingActive", "ChargingEnabled", "BatteryFailure", "BattTempCAvg"};
+    for (int i = 0; i < 5; i++){
       int serialString = batteryInfoTemp.indexOf(checkArray[i]);
       if (serialString > -1){
         int checkLength = checkArray[i].length()+4;
         int capUntil = serialString+checkLength;
+        int commaIndex = batteryInfoTemp.substring(serialString, capUntil).indexOf(',');
+        String currentItem = batteryInfoTemp.substring(serialString,capUntil);
+        currentItem.trim();
         if (i == 0) {
-          batteryInfo = batteryInfoTemp.substring(serialString,capUntil);
+          batteryInfo = currentItem.substring(commaIndex+1,capUntil);
         } else {
-          batteryInfo = batteryInfo + "," + batteryInfoTemp.substring(serialString,capUntil);
+          batteryInfo = batteryInfo + "," + currentItem.substring(commaIndex+1,capUntil);
         }
       }
     }
