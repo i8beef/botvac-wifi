@@ -22,9 +22,11 @@
 String readString;
 String incomingSerial = "Empty";
 String incomingErr;
-String firmware = "1.3";
+String firmware = "1.5";
 String batteryInfo;
+String lidarInfo;
 int lastBattRun = 0;
+int lastLidarRun = 0;
 int lastErrRun = 0;
 char serialnum[256];
 
@@ -55,6 +57,12 @@ void getPage() {
       } else {
         lastErrRun++;
       }
+      if (lidarInfo == "" || lidarInfo == "-FAIL-" || lastLidarRun > 1) {
+        getLidar();
+        lastLidarRun = 0;
+      } else {
+        lastLidarRun++;
+      }
       if (batteryInfo != "" && batteryInfo != "-FAIL-" && incomingSerial.indexOf("Empty") == -1 && incomingSerial != "") {
         HTTPClient http;  //Declare an object of class HTTPClient
         http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+incomingSerial+"&battery="+batteryInfo+"&firmware="+firmware+"&errorMsg="+incomingErr);  //Specify request destination
@@ -84,7 +92,12 @@ void getSerial() {
       int commaIndex = serialCap.indexOf(',');
       int secondCommaIndex = serialCap.indexOf(',', commaIndex + 1);
       int thirdCommaIndex = serialCap.indexOf(',', secondCommaIndex + 1);
-      incomingSerial = serialCap.substring(secondCommaIndex + 1, thirdCommaIndex); // To the end of the string
+      String incomingSerialCheck = serialCap.substring(secondCommaIndex + 1, thirdCommaIndex); // To the end of the string
+      if (incomingSerialCheck.indexOf("Welcome") > -1) {
+        ESP.reset();
+      } else {
+        incomingSerial = incomingSerialCheck;
+      }
     }
 }
 
@@ -103,6 +116,36 @@ void getError() {
     } else {
       incomingErr = "None";
     }
+}
+
+void getLidar() {
+    Serial.setTimeout(500);
+    Serial.println("GetLDSScan");
+    String lidarInfoTemp = Serial.readString();
+    for (int i = 0; i < 360; i++){
+      String currentDegree = String(i);
+      int serialString = lidarInfoTemp.indexOf("\n"+currentDegree+",");
+      if (serialString > -1){
+        int capUntil = serialString+20;
+        String serialCap = lidarInfoTemp.substring(serialString-1, capUntil);
+        int commaIndex = serialCap.indexOf(',');
+        int secondCommaIndex = serialCap.indexOf(',', commaIndex + 1);
+        int thirdCommaIndex = serialCap.indexOf(',', secondCommaIndex + 1);
+        String currentCapture = serialCap.substring(commaIndex+1,secondCommaIndex);
+        if (i == 0) {
+            lidarInfo = serialCap.substring(commaIndex+1,secondCommaIndex);
+        } else {
+            lidarInfo = lidarInfo + "," + serialCap.substring(commaIndex+1,secondCommaIndex);
+        }
+      }
+      lidarInfo.trim();
+    }
+    HTTPClient http;
+    http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+incomingSerial);
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+    http.POST("lidar="+lidarInfo);
+    http.writeToStream(&Serial);
+    http.end();
 }
 
 void getBattery() {
@@ -336,7 +379,7 @@ void loop() {
   
   checkServer.check();
   // Get our serial if we can
-  if (incomingSerial.indexOf("Empty") != -1 || incomingSerial == ""){
+  if (incomingSerial.indexOf("Empty") != -1 || incomingSerial == "" || incomingSerial.indexOf("Welcome") > -1){
     getSerial();
   }
   checkServer.check();
