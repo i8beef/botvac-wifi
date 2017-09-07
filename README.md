@@ -62,7 +62,7 @@ The software includes multicast DNS (mDNS), so you should be able to connect to 
 For convenience and safety purposes, "TestMode off" is always send to the bot if a user disconnects.
 
 ### Websocket
-The websocket server is listening on port 81. Everything that you send via the websocket connection is directly sent to the serial interface and the results from the serial interface are returned via the websocket connection ~~~(see also limitations)~~~.
+The websocket server is listening on port 81. Everything that you send via the websocket connection is directly sent to the serial interface and the results from the serial interface are returned via the websocket connection ~~(see also limitations)~~.
 
 ### HTML Interface
 The software also includes a simple HTML interface for the websocket connection. Connect with a browser to the bot to see it. The websocket connection is automatically established in the background. Type a command and press enter to send the command. The results are automatically displayed. You can disconnect by typing /disconnect or clear the screen by typing /clear.
