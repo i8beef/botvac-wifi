@@ -17,8 +17,7 @@ _This project was tested with a Neato Botvac 85 and an ESP8266 ESP-12F._
 
 ## Setup
 ### Hardware
-Any ESP8266 with 1MB or larger flash can be used with this program. I'm using a Witty Cloud Module ([for example this one](https://www.aliexpress.com/item/ESP8266/32643464555.html)). This is an ESP-12F module with a breakout board for easier development and it can be USB powered with power regulation. It also includes a daughter board with a serial bridge and all resistors etc. for easier flashing.
-
+Any ESP8266 with 1MB or larger flash can be used with this program.
 There is a card edge connector on each side of the main board (labelled P7 on top side and P25 on the bottom side) at the front right corner (when viewed from the front of the bot) of the bot. The pins are as follows:
 
 Top:
@@ -60,10 +59,10 @@ On initial bootup, a Wifi AP will show up with the SSID "neato". You will need t
 ## Usage
 The software includes multicast DNS (mDNS), so you should be able to connect to the bot with http://neato.local for a simple websocket interface or use ws://neata.local:81 for a direct websocket connection. Alternatively you can check your router IP page to find out the IP address of the bot or use a tool like nmao (https://nmap.org/).
 
-#Linking your device to neato scheduler
-Step 1: Login and navigate to "my profile"
-Step 2: Click "add device" and input your device information (serial number, model, location)
-Step 3: Click "add device"
+# Linking your device to neato scheduler
+* Step 1: Login and navigate to "my profile"
+* Step 2: Click "add device" and input your device information (serial number, model, location)
+* Step 3: Click "add device"
 
 For convenience and safety purposes, "TestMode off" is always send to the bot if a user disconnects.
 
@@ -82,13 +81,13 @@ Send help to the bot to see an overview of all commands or send help [command na
 * ~~Responses that are to big to fit into a single TCP packet are split up into multiple websocket messages. Always check for the response for the end of file marker (ctrl-z; \x1A). This a workaround for a possible bug in the network APIs (see also https://github.com/Links2004/arduinoWebSockets/issues/85).~~ **Resolved in latest version**
 
 ## Updating ESP8266 firmware
-Step 1: Navigate to https://www.neatoscheduler.com and log in
-Step 2: Navigate to "my profile"
-Step 3: Click the button labeled as "Latest Firmware" and the firmware will download
-Step 4: Navigate to http://neato.local:82/updateServer
-Step 5: Choose and upload your downloaded firmware in Step 3
-Step 6: Click the button labeled as "Update" and the firmware will upload
-Step 7: Wait until ESP comes back online
+* Step 1: Navigate to https://www.neatoscheduler.com and log in
+* Step 2: Navigate to "my profile"
+* Step 3: Click the button labeled as "Latest Firmware" and the firmware will download
+* Step 4: Navigate to http://neato.local:82/updateServer
+* Step 5: Choose and upload your downloaded firmware in Step 3
+* Step 6: Click the button labeled as "Update" and the firmware will upload
+* Step 7: Wait until ESP comes back online
 
 **The (sadly) necessary disclaimer:**
 
