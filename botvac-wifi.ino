@@ -22,12 +22,13 @@
 String readString;
 String incomingSerial = "Empty";
 String incomingErr;
-String firmware = "1.5";
+String firmware = "1.6";
 String batteryInfo;
 String lidarInfo;
 int lastBattRun = 0;
 int lastLidarRun = 0;
 int lastErrRun = 0;
+int lastTimeRun = 288;
 char serialnum[256];
 
 
@@ -57,11 +58,11 @@ void getPage() {
       } else {
         lastErrRun++;
       }
-      if (lidarInfo == "" || lidarInfo == "-FAIL-" || lastLidarRun > 1) {
-        getLidar();
-        lastLidarRun = 0;
+      if (incomingSerial != "Empty" && lastTimeRun > 287) {
+        setTime();
+        lastTimeRun = 0;
       } else {
-        lastLidarRun++;
+        lastTimeRun++;
       }
       if (batteryInfo != "" && batteryInfo != "-FAIL-" && incomingSerial.indexOf("Empty") == -1 && incomingSerial != "") {
         HTTPClient http;  //Declare an object of class HTTPClient
@@ -77,6 +78,22 @@ void getPage() {
           }
         }
         http.end();   //Close connection
+        getLidar();   // Lidar push each run.w
+      }
+    }
+}
+
+void setTime() {
+    HTTPClient http;  //Declare an object of class HTTPClient
+    http.begin("http://www.neatoscheduler.com/api/getTime.php?serial="+incomingSerial);  //Specify request destination
+    int httpCode = http.GET(); //Send the request
+ 
+    if (httpCode > 0) { //Check the returning code
+ 
+      String payload = http.getString();   //Get the request response payload
+      if (payload.indexOf(",") != -1) {
+        // If it's something other than none, shoot it to the vac.
+        Serial.println("SetTime "+payload);
       }
     }
 }
