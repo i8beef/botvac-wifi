@@ -17,6 +17,7 @@
 #define SSID_FILE "etc/ssid"
 #define PASSWORD_FILE "etc/pass"
 #define SERIAL_NUMBER "etc/serial"
+#define CONNECT_TIMEOUT_SECS 30
 
 #define AP_SSID "neato"
 String readString;
@@ -234,20 +235,65 @@ void serverEvent() {
 }
 
 void setupEvent() {
-  server.send(200, "text/html", "<!DOCTYPE html><html> <body> <form action=\"\" method=\"post\"> Access Point SSID:<br><input type=\"text\" name=\"ssid\" value=\"XXX\"> <br>WPA2 Password:<br><input type=\"text\" name=\"password\" value=\"XXX\"> <br><br><input type=\"submit\" value=\"Submit\"> </form> <p>Enter the details for your access point. After you submit, the controller will reboot to apply the settings.</p></body></html>\n");
+  char ssid[256];
+  File ssid_file = SPIFFS.open(SSID_FILE, "r");
+  if(!ssid_file) {
+    strcpy(ssid, "XXX");
+  }
+  else {
+    ssid_file.readString().toCharArray(ssid, 256);
+    ssid_file.close();
+  }
+
+  char passwd[256];
+  File passwd_file = SPIFFS.open(PASSWORD_FILE, "r");
+  if(!passwd_file) {
+    strcpy(passwd, "XXX");
+  }
+  else {
+    passwd_file.readString().toCharArray(passwd, 256);
+    passwd_file.close();
+  }
+  server.send(200, "text/html", String() + 
+  "<!DOCTYPE html><html> <body>" +
+  "<form action=\"\" method=\"post\"> Access Point SSID:<br />" +
+  "<input type=\"text\" name=\"ssid\" value=\"" + ssid + "\"> <br />" +
+  "WPA2 Password:<br />" +
+  "<input type=\"text\" name=\"password\" value=\"" + passwd + "\"> <br />" +
+  "<br />" +
+  "<input type=\"submit\" value=\"Submit\"> </form>" +
+  "<p>Enter the details for your access point. After you submit, the controller will reboot to apply the settings.</p>" +
+  "<p><a href=\"http://neato.local:82/update\">Update Firmware</a></p>" +
+  "</body></html>\n");
 }
 
 void saveEvent() {
   String user_ssid = server.arg("ssid");
   String user_password = server.arg("password");
-  
+  SPIFFS.format();
   if(user_ssid != "" && user_password != "") {
     File ssid_file = SPIFFS.open(SSID_FILE, "w");
+    if (!ssid_file) {
+      server.send(200, "text/html", "<!DOCTYPE html><html> <body> Setting Access Point SSID failed!</body> </html>");
+      return;
+    }
     ssid_file.print(user_ssid);
     ssid_file.close();
     File passwd_file = SPIFFS.open(PASSWORD_FILE, "w");
+    if (!passwd_file) {
+      server.send(200, "text/html", "<!DOCTYPE html><html> <body> Setting Access Point password failed!</body> </html>");
+      return;
+    }
     passwd_file.print(user_password);
     passwd_file.close();
+
+    server.send(200, "text/html", String() + 
+    "<!DOCTYPE html><html> <body>" +
+    "Setting Access Point SSID / password was successful! <br />" +
+    "<br />SSID was set to \"" + user_ssid + "\" with the password \"" + user_password + "\". <br />" +
+    "<br /> The controller will now reboot. Please re-connect to your Wi-Fi network.<br />" +
+    "If the SSID or password was incorrect, the controller will return to Access Point mode." +
+    "</body> </html>");
     ESP.reset();
   }
   //save these to the filesystem
@@ -301,8 +347,11 @@ void setup() {
   // start serial
   // botvac serial console is 115200 baud, 8 data bits, no parity, one stop bit (8N1)
   Serial.begin(115200);
-
-  SPIFFS.begin();
+  //try to mount the filesystem. if that fails, format the filesystem and try again.
+  if(!SPIFFS.begin()) {
+    SPIFFS.format();
+    SPIFFS.begin();
+  }
   
   if(SPIFFS.exists(SSID_FILE) && SPIFFS.exists(PASSWORD_FILE)) {
     File ssid_file = SPIFFS.open(SSID_FILE, "r");
@@ -314,18 +363,22 @@ void setup() {
     passwd_file.readString().toCharArray(passwd, 256);
     passwd_file.close();
 
-  // start wifi
+    // attempt station connection
     WiFi.disconnect();
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, passwd);
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
+    
+    for(int i = 0; i < CONNECT_TIMEOUT_SECS * 20 && WiFi.status() != WL_CONNECTED; i++) {
+      delay(50);
     }
   }
-  else {
+
+  //start AP mode if either the AP / password do not exist, or cannot be connected to within CONNECT_TIMEOUT_SECS seconds.
+  if(WiFi.status() == WL_NO_SSID_AVAIL || WiFi.status() == WL_CONNECT_FAILED) {
     WiFi.disconnect();
+    WiFi.mode(WIFI_AP);
     if(! WiFi.softAP(AP_SSID))
-      ESP.reset();
+      ESP.reset(); //reset because there's no good reason for setting up an AP to fail
   }
 
   // start websocket
@@ -369,10 +422,8 @@ void setup() {
   // start MDNS
   // this means that the botvac can be reached at http://neato.local or ws://neato.local:81
   if (!MDNS.begin("neato")) {
-    while (1) {
-      // wait for watchdog timer
-      delay(500);
-    }
+    Serial.print('ieeee! MDNS failure!');
+    ESP.reset(); //reset because there's no good reason for setting up MDNS to fail
   }
   MDNS.addService("http", "tcp", 80);
   MDNS.addService("ws", "tcp", 81);
