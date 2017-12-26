@@ -16,22 +16,23 @@
 
 #define SSID_FILE "etc/ssid"
 #define PASSWORD_FILE "etc/pass"
-#define SERIAL_NUMBER "etc/serial"
+#define SERIAL_FILE "etc/serial"
+
 #define CONNECT_TIMEOUT_SECS 30
+#define SERIAL_NUMBER_ATTEMPTS 5
 
 #define AP_SSID "neato"
 
 String readString;
-String incomingSerial = "Empty";
 String incomingErr;
 String firmware = "1.7";
 String batteryInfo;
 String lidarInfo;
+String serialNumber = "Empty";
 int lastBattRun = 0;
 int lastLidarRun = 0;
 int lastErrRun = 0;
 int lastTimeRun = 288;
-char serialnum[256];
 
 
 WiFiClient client;
@@ -60,15 +61,15 @@ void getPage() {
       } else {
         lastErrRun++;
       }
-      if (incomingSerial != "Empty" && lastTimeRun > 287) {
+      if (serialNumber != "Empty" && lastTimeRun > 287) {
         setTime();
         lastTimeRun = 0;
       } else {
         lastTimeRun++;
       }
-      if (batteryInfo != "" && batteryInfo != "-FAIL-" && incomingSerial.indexOf("Empty") == -1 && incomingSerial != "") {
+      if (batteryInfo != "" && batteryInfo != "-FAIL-" && serialNumber != "Empty") {
         HTTPClient http;  //Declare an object of class HTTPClient
-        http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+incomingSerial+"&battery="+batteryInfo+"&firmware="+firmware+"&errorMsg="+incomingErr);  //Specify request destination
+        http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+serialNumber+"&battery="+batteryInfo+"&firmware="+firmware+"&errorMsg="+incomingErr);  //Specify request destination
         int httpCode = http.GET(); //Send the request
      
         if (httpCode > 0) { //Check the returning code
@@ -80,14 +81,14 @@ void getPage() {
           }
         }
         http.end();   //Close connection
-        getLidar();   // Lidar push each run.w
+        getLidar();   // Lidar push each run
       }
     }
 }
 
 void setTime() {
     HTTPClient http;  //Declare an object of class HTTPClient
-    http.begin("http://www.neatoscheduler.com/api/getTime.php?serial="+incomingSerial);  //Specify request destination
+    http.begin("http://www.neatoscheduler.com/api/getTime.php?serial="+serialNumber);  //Specify request destination
     int httpCode = http.GET(); //Send the request
  
     if (httpCode > 0) { //Check the returning code
@@ -100,12 +101,28 @@ void setTime() {
     }
 }
 
-void getSerial() {
+String getSerial() {
+  String serial;
+  File serial_file = SPIFFS.open(SERIAL_FILE, "r");
+  if(! serial_file || serial_file.readString() == "" ) {
+    serial_file.close();
     Serial.setTimeout(250);
-    Serial.println("GetVersion");
-    incomingSerial = Serial.readString();
-    int serialString = incomingSerial.indexOf("Serial Number");
-    if (serialString > -1){
+    String incomingSerial;
+    int serialString;
+    
+    for(int i=0; i <= SERIAL_NUMBER_ATTEMPTS; i++) {
+      Serial.println("GetVersion");
+      incomingSerial = Serial.readString();
+      serialString = incomingSerial.indexOf("Serial Number");
+      if (serialString > -1)
+        break;
+      delay(50);
+    }
+
+
+    if (serialString == -1)
+      serial = "Empty";
+    else {
       int capUntil = serialString+50;
       String serialCap = incomingSerial.substring(serialString, capUntil);
       int commaIndex = serialCap.indexOf(',');
@@ -115,9 +132,19 @@ void getSerial() {
       if (incomingSerialCheck.indexOf("Welcome") > -1) {
         ESP.reset();
       } else {
-        incomingSerial = incomingSerialCheck;
+        serial_file = SPIFFS.open(SERIAL_FILE, "w");
+        serial_file.print(incomingSerialCheck);
+        serial_file.close();
+        serial = incomingSerialCheck;
       }
     }
+  }
+  else {
+    serial_file.seek(0, SeekSet);
+    serial = serial_file.readString();
+    serial_file.close();
+  }
+  return serial;
 }
 
 void getError() {
@@ -160,7 +187,7 @@ void getLidar() {
       lidarInfo.trim();
     }
     HTTPClient http;
-    http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+incomingSerial);
+    http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+serialNumber);
     http.addHeader("Content-Type", "application/x-www-form-urlencoded");
     http.POST("lidar="+lidarInfo);
     http.writeToStream(&Serial);
@@ -257,12 +284,17 @@ void setupEvent() {
   }
   server.send(200, "text/html", String() + 
   "<!DOCTYPE html><html> <body>" +
-  "<form action=\"\" method=\"post\"> Access Point SSID:<br />" +
+  "<p>Neato serial number: <b>" + serialNumber + "</b></p>" +
+  "<form action=\"\" method=\"post\" style=\"display: inline;\">" +
+  "Access Point SSID:<br />" +
   "<input type=\"text\" name=\"ssid\" value=\"" + ssid + "\"> <br />" +
   "WPA2 Password:<br />" +
   "<input type=\"text\" name=\"password\" value=\"" + passwd + "\"> <br />" +
   "<br />" +
   "<input type=\"submit\" value=\"Submit\"> </form>" +
+  "<form action=\"http://neato.local/reboot\" style=\"display: inline;\">" +
+  "<input type=\"submit\" value=\"Reboot\" />" +
+  "</form>" +
   "<p>Enter the details for your access point. After you submit, the controller will reboot to apply the settings.</p>" +
   "<p><a href=\"http://neato.local:82/update\">Update Firmware</a></p>" +
   "<p><a href=\"http://neato.local/console\">Neato Serial Console</a> - <a href=\"https://www.neatorobotics.com/resources/programmersmanual_20140305.pdf\">Command Documentation</a></p>" +
@@ -298,7 +330,15 @@ void saveEvent() {
     "</body> </html>");
     ESP.reset();
   }
-  //save these to the filesystem
+}
+
+void rebootEvent() {
+  server.send(200, "text/html", String() + 
+  "<!DOCTYPE html><html> <body>" +
+  "The controller will now reboot.<br />" +
+  "If the SSID or password is set but is incorrect, the controller will return to Access Point mode." +
+  "</body> </html>");
+  ESP.reset();
 }
 
 void serialEvent() {
@@ -349,11 +389,14 @@ void setup() {
   // start serial
   // botvac serial console is 115200 baud, 8 data bits, no parity, one stop bit (8N1)
   Serial.begin(115200);
+  
   //try to mount the filesystem. if that fails, format the filesystem and try again.
   if(!SPIFFS.begin()) {
     SPIFFS.format();
     SPIFFS.begin();
   }
+    
+  serialNumber = getSerial();
   
   if(SPIFFS.exists(SSID_FILE) && SPIFFS.exists(PASSWORD_FILE)) {
     File ssid_file = SPIFFS.open(SSID_FILE, "r");
@@ -418,6 +461,7 @@ void setup() {
   server.on("/console", serverEvent);
   server.on("/", HTTP_POST, saveEvent);
   server.on("/", HTTP_GET, setupEvent);
+  server.on("/reboot", HTTP_GET, rebootEvent);
   server.onNotFound(serverEvent);
   server.begin();
 
@@ -445,12 +489,6 @@ void loop() {
   
   checkServer.check();
   updateServer.handleClient();
-  
-  checkServer.check();
-  // Get our serial if we can
-  if (incomingSerial.indexOf("Empty") != -1 || incomingSerial == "" || incomingSerial.indexOf("Welcome") > -1){
-    getSerial();
-  }
   checkServer.check();
   serialEvent();
   }
