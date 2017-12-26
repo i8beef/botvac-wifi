@@ -20,10 +20,11 @@
 #define CONNECT_TIMEOUT_SECS 30
 
 #define AP_SSID "neato"
+
 String readString;
 String incomingSerial = "Empty";
 String incomingErr;
-String firmware = "1.6";
+String firmware = "1.7";
 String batteryInfo;
 String lidarInfo;
 int lastBattRun = 0;
@@ -367,18 +368,18 @@ void setup() {
     WiFi.disconnect();
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, passwd);
-    
     for(int i = 0; i < CONNECT_TIMEOUT_SECS * 20 && WiFi.status() != WL_CONNECTED; i++) {
       delay(50);
     }
   }
 
   //start AP mode if either the AP / password do not exist, or cannot be connected to within CONNECT_TIMEOUT_SECS seconds.
-  if(WiFi.status() == WL_NO_SSID_AVAIL || WiFi.status() == WL_CONNECT_FAILED) {
+  if(WiFi.status() != WL_CONNECTED) {
     WiFi.disconnect();
     WiFi.mode(WIFI_AP);
-    if(! WiFi.softAP(AP_SSID))
+    if(! WiFi.softAP(AP_SSID)) {
       ESP.reset(); //reset because there's no good reason for setting up an AP to fail
+    }
   }
 
   // start websocket
@@ -422,7 +423,6 @@ void setup() {
   // start MDNS
   // this means that the botvac can be reached at http://neato.local or ws://neato.local:81
   if (!MDNS.begin("neato")) {
-    Serial.print('ieeee! MDNS failure!');
     ESP.reset(); //reset because there's no good reason for setting up MDNS to fail
   }
   MDNS.addService("http", "tcp", 80);
