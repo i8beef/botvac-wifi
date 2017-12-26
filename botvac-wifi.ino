@@ -265,6 +265,7 @@ void setupEvent() {
   "<input type=\"submit\" value=\"Submit\"> </form>" +
   "<p>Enter the details for your access point. After you submit, the controller will reboot to apply the settings.</p>" +
   "<p><a href=\"http://neato.local:82/update\">Update Firmware</a></p>" +
+  "<p><a href=\"http://neato.local/console\">Neato Serial Console</a> - <a href=\"https://www.neatorobotics.com/resources/programmersmanual_20140305.pdf\">Command Documentation</a></p>" +
   "</body></html>\n");
 }
 
