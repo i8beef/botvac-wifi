@@ -23,9 +23,12 @@
 
 #define AP_SSID "neato"
 
+#define FIRMWARE = "1.7"
+
+#define MAX_BUFFER 8192
+
 String readString;
 String incomingErr;
-String firmware = "1.7";
 String batteryInfo;
 String lidarInfo;
 String serialNumber = "Empty";
@@ -34,9 +37,7 @@ int lastLidarRun = 0;
 int lastErrRun = 0;
 int lastTimeRun = 288;
 
-
 WiFiClient client;
-int maxBuffer = 8192;
 int bufferSize = 0;
 uint8_t currentClient = 0;
 uint8_t serialBuffer[8193];
@@ -69,7 +70,7 @@ void getPage() {
       }
       if (batteryInfo != "" && batteryInfo != "-FAIL-" && serialNumber != "Empty") {
         HTTPClient http;  //Declare an object of class HTTPClient
-        http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+serialNumber+"&battery="+batteryInfo+"&firmware="+firmware+"&errorMsg="+incomingErr);  //Specify request destination
+        http.begin("http://www.neatoscheduler.com/api/actionPull.php?serial="+serialNumber+"&battery="+batteryInfo+"&firmware="+FIRMWARE+"&errorMsg="+incomingErr);  //Specify request destination
         int httpCode = http.GET(); //Send the request
      
         if (httpCode > 0) { //Check the returning code
@@ -353,11 +354,11 @@ void serialEvent() {
     }
     serialBuffer[bufferSize] = in;
     bufferSize++;
-    // fill up the serial buffer until its max size (8192 bytes, see maxBuffer)
+    // fill up the serial buffer until its max size (8192 bytes, see MAX_BUFFER)
     // or unitl the end of file marker (ctrl-z; \x1A) is reached
-    // a worst caste lidar result should be just under 8k, so that maxBuffer
+    // a worst caste lidar result should be just under 8k, so that MAX_BUFFER
     // limit should not be reached under normal conditions
-    if (bufferSize > maxBuffer - 1 || in == '\x1A') {
+    if (bufferSize > MAX_BUFFER - 1 || in == '\x1A') {
       serialBuffer[bufferSize] = '\0';
       bool allSend = false;
       uint8_t localBuffer[1464];
